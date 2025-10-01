@@ -119,7 +119,7 @@ export default async function handler(req, res) {
       );
 
       if (!znalezione.length) {
-        rows.push({ ref: "", nazwa: `${nazwa} (brak w arkuszu)`, cena: 0, qty });
+        rows.push({ ref: "", nazwa: `${nazwa} (brak w ofercie)`, cena: 0, qty });
         return;
       }
 
@@ -156,3 +156,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ ok: false, error: String(err) });
   }
 }
+
