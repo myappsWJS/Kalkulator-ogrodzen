@@ -1,11 +1,5 @@
 import fetch from "node-fetch";
 
-/**
- * /api/kalkulator
- * - GET ?mode=login&pass=...   -> { ok: true/false }
- * - POST (JSON) { dlugosc, narozniki, wysokosc, kolor } -> { ok:true, html: "<tr>...</tr>" }
- */
-
 const DEFAULT_LOGIN = process.env.LOGIN_CODE || "lm-10";
 const DEFAULT_SHEET_ID = process.env.SHEET_ID || "1ady3fw4DZBHYeJ0yumcUGCUcX4Qp1w2tA79n2-9DvJQ";
 const DEFAULT_GID_MAP = (() => {
@@ -21,28 +15,19 @@ function safeParseFloat(v) {
   return parseFloat(String(v).replace(",", "."));
 }
 
-function fmtNum(v, digits = 2) {
-  if (v === null || v === undefined || isNaN(v)) return "";
-  return Number.isInteger(v) ? String(v) : v.toFixed(digits);
-}
-
 export default async function handler(req, res) {
   try {
-    // --- LOGIN (GET) ---
+    // --- LOGIN ---
     if (req.method === "GET" && req.query && req.query.mode === "login") {
       const pass = req.query.pass || "";
       const ok = pass === (process.env.LOGIN_CODE || DEFAULT_LOGIN);
-      res.setHeader("Content-Type", "application/json");
       return res.status(200).json({ ok });
     }
 
-    // --- ONLY POST for calc ---
     if (req.method !== "POST") {
-      res.setHeader("Content-Type", "application/json");
       return res.status(405).json({ ok: false, error: "Only POST for calculation" });
     }
 
-    // body should be already parsed by Vercel (JSON)
     const body = req.body || {};
     const dlugosc = Number(body.dlugosc ?? body.B4 ?? 0);
     const narozniki = Number(body.narozniki ?? body.B5 ?? 0);
@@ -53,10 +38,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok: false, error: "Brakuje parametrów: wysokosc i/lub kolor" });
     }
 
-    const B4 = Number(dlugosc) || 0;
+    const B4 = dlugosc || 0;
     const B5 = Math.max(0, parseInt(narozniki) || 0);
 
-    // --------- formuły (identyczne do frontendu) ----------
+    // --------- formuły ----------
     let D4;
     if (B4 <= 25) D4 = 2;
     else if (B4 <= 50) D4 = 4;
@@ -93,7 +78,7 @@ export default async function handler(req, res) {
     let B16 = B12;
     let Siatka = Math.ceil(B4 / 10);
 
-    // --------- pobieranie cennika z Google Sheets ----------
+    // --------- pobranie arkusza ----------
     const sheetId = process.env.SHEET_ID || DEFAULT_SHEET_ID;
     const gidMap = (process.env.GID_MAP ? (() => {
       try { return JSON.parse(process.env.GID_MAP); } catch(e) { return DEFAULT_GID_MAP; }
@@ -105,73 +90,69 @@ export default async function handler(req, res) {
     if (gid) {
       const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${encodeURIComponent(gid)}`;
       const fetchRes = await fetch(url, { redirect: "follow" });
-      if (!fetchRes.ok) {
-        // nie przerywamy — zwrócimy obliczenia ale bez produktów
-        console.warn("Google Sheets fetch status:", fetchRes.status);
-      } else {
+      if (fetchRes.ok) {
         const text = await fetchRes.text();
-        // bezpieczne wydobycie JSON z wrappera google.visualization.Query.setResponse(...)
         const firstBrace = text.indexOf("{");
         const lastBrace = text.lastIndexOf("}");
         if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
           const jsonText = text.slice(firstBrace, lastBrace + 1);
           const parsed = JSON.parse(jsonText);
-          produkty = (parsed.table && parsed.table.rows ? parsed.table.rows.map(r => ({
-            ref: r.c && r.c[0] ? r.c[0].v : "",
-            nazwa: r.c && r.c[1] ? r.c[1].v : "",
-            cena: r.c && r.c[4] ? safeParseFloat(r.c[4].v) : NaN
-          })) : []);
+          produkty = (parsed.table?.rows || []).map(r => ({
+            ref: r.c?.[0]?.v || "",
+            nazwa: r.c?.[1]?.v || "",
+            cena: safeParseFloat(r.c?.[4]?.v)
+          }));
         }
       }
     }
 
-    // ---------- funkcja pomocnicza generująca wiersz(y) ----------
+    // --------- budowanie wyników ----------
     let total = 0;
-    function szukaj(nazwa, qty) {
+    const rows = [];
+
+    function dodaj(nazwa, qty) {
       const keyword = String(nazwa || "").toUpperCase();
       const kolorU = String(kolor || "").toUpperCase();
-      const znalezione = produkty.filter(p => p.nazwa && p.nazwa.toUpperCase().includes(keyword) && (!kolorU || p.nazwa.toUpperCase().includes(kolorU)));
+      const znalezione = produkty.filter(
+        p => p.nazwa?.toUpperCase().includes(keyword) &&
+             (!kolorU || p.nazwa.toUpperCase().includes(kolorU))
+      );
 
-      if (!znalezione || znalezione.length === 0) {
-        return `<tr><td></td><td>${nazwa} (brak w arkuszu)</td><td></td><td>${fmtNum(qty,0)}</td><td>0.00</td></tr>`;
-      } else if (znalezione.length === 1) {
+      if (!znalezione.length) {
+        rows.push({ ref: "", nazwa: `${nazwa} (brak w arkuszu)`, cena: 0, qty });
+        return;
+      }
+
+      if (znalezione.length === 1) {
         const w = znalezione[0];
         const cena = isNaN(Number(w.cena)) ? 0 : Number(w.cena);
-        const wartosc = (isNaN(cena) ? 0 : cena) * (isNaN(qty) ? 0 : Number(qty));
+        const wartosc = cena * qty;
         total += wartosc;
-        return `<tr><td>${w.ref}</td><td>${w.nazwa}</td><td>${fmtNum(cena,2)}</td><td>${fmtNum(qty,0)}</td><td>${fmtNum(wartosc,2)}</td></tr>`;
+        rows.push({ ref: w.ref, nazwa: w.nazwa, cena, qty });
       } else {
-        // wiele wyników -> informacja (w razie potrzeby można rozszerzyć o <select>)
-        // Tutaj zwracamy listę możliwych opcji jako podwiersze (użytkownik może potem wybrać)
-        const optionsHtml = znalezione.map(w => {
+        // wiele opcji → wrzucamy tablicę wariantów
+        const warianty = znalezione.map(w => {
           const cena = isNaN(Number(w.cena)) ? 0 : Number(w.cena);
-          const wartosc = cena * (isNaN(qty) ? 0 : Number(qty));
-          return `<div>${w.ref} — ${w.nazwa} — ${fmtNum(cena,2)} — ilość: ${fmtNum(qty,0)} — wartość: ${fmtNum(wartosc,2)}</div>`;
-        }).join("");
-        return `<tr><td></td><td>Wybierz rodzaj dla ${nazwa}</td><td colspan="3">${optionsHtml}</td></tr>`;
+          return { ref: w.ref, nazwa: w.nazwa, cena, qty };
+        });
+        rows.push(warianty);
       }
     }
 
-    // generuj html tabeli (bez tagu <table> — frontend wstawia do swojej tabeli)
-    let html = "";
-    html += `<tr class="header-row"><th>Referencja</th><th>Nazwa</th><th>Cena</th><th>Ilość</th><th>Wartość</th></tr>\n`;
-    html += szukaj("Siatka", Siatka) + "\n";
-    html += szukaj("SŁUPEK", B8) + "\n";
-    html += szukaj("DRUT NACIĄGOWY", B9) + "\n";
-    html += szukaj("DRUT WIĄZAŁKOWY", B10) + "\n";
-    html += szukaj("NAPINACZ", B11) + "\n";
-    html += szukaj("NASADKA", B12) + "\n";
-    html += szukaj("PRZELOT", B13) + "\n";
-    html += szukaj("OBEJMA", B14) + "\n";
-    html += szukaj("ŚRUBA", B15) + "\n";
-    html += szukaj("PRĘT", B16) + "\n";
-    html += `<tr class="sum-row"><td colspan="4">SUMA</td><td id="suma">${fmtNum(total,2)}</td></tr>\n`;
+    dodaj("Siatka", Siatka);
+    dodaj("SŁUPEK", B8);
+    dodaj("DRUT NACIĄGOWY", B9);
+    dodaj("DRUT WIĄZAŁKOWY", B10);
+    dodaj("NAPINACZ", B11);
+    dodaj("NASADKA", B12);
+    dodaj("PRZELOT", B13);
+    dodaj("OBEJMA", B14);
+    dodaj("ŚRUBA", B15);
+    dodaj("PRĘT", B16);
 
-    res.setHeader("Content-Type", "application/json");
-    return res.status(200).json({ ok: true, html });
+    return res.status(200).json({ ok: true, rows, suma: total });
   } catch (err) {
     console.error("API kalkulator error:", err);
-    res.setHeader("Content-Type", "application/json");
     return res.status(500).json({ ok: false, error: String(err) });
   }
 }
