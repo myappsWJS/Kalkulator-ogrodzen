@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kalkulator akcesoriów do monta¿u siatki</title>
+<title>Kalkulator akcesoriÃ³w do montaÅ¼u siatki</title>
 <style>
   body { font-family: Arial, sans-serif; background: #ccc; padding: 20px; text-align: center; margin: 0; }
   .container { width: 100%; max-width: 800px; margin: auto; display: none; }
@@ -33,29 +33,29 @@
 <!-- ekran logowania -->
 <div id="login-box">
   <h2>Logowanie</h2>
-  <input type="password" id="login-pass" placeholder="Wpisz kod dostêpu">
+  <input type="password" id="login-pass" placeholder="Wpisz kod dostÄ™pu">
   <br><br>
   <button id="login-btn">Zaloguj</button>
-  <p id="login-msg" style="color:red; display:none;">B³êdny kod!</p>
+  <p id="login-msg" style="color:red; display:none;">BÅ‚Ä™dny kod!</p>
 </div>
 
-<!-- g³ówna aplikacja -->
+<!-- gÅ‚Ã³wna aplikacja -->
 <div class="container">
-  <h2>Kalkulator ogrodzeñ z siatki</h2>
+  <h2>Kalkulator ogrodzeÅ„ z siatki</h2>
 
   <table>
     <tr>
-      <td class="label-cell">D³ugoœæ ca³kowita ogrodzenia (m)</td>
+      <td class="label-cell">DÅ‚ugoÅ›Ä‡ caÅ‚kowita ogrodzenia (m)</td>
       <td class="input-cell" colspan="3"><input type="number" id="dlugosc" value="0" min="0" step="0.1"></td>
     </tr>
     <tr>
-      <td class="label-cell">Iloœæ naro¿ników</td>
+      <td class="label-cell">IloÅ›Ä‡ naroÅ¼nikÃ³w</td>
       <td class="input-cell" colspan="3">
         <select id="narozniki"><option>0</option><option>1</option><option>2</option><option>3</option></select>
       </td>
     </tr>
     <tr>
-      <td class="label-cell">Wysokoœæ ogrodzenia</td>
+      <td class="label-cell">WysokoÅ›Ä‡ ogrodzenia</td>
       <td class="input-cell" colspan="3">
         <select id="wysokosc">
           <option value="">Wybierz</option>
@@ -115,10 +115,10 @@ document.getElementById("btnCalc").addEventListener("click", async () => {
   });
 
   const data = await res.json();
-  if(!data.ok){ alert("B³¹d kalkulacji"); return; }
+  if(!data.ok){ alert("BÅ‚Ä…d kalkulacji"); return; }
 
   wynikiTable.style.display = "table";
-  wynikiTable.innerHTML = data.html; // backend zwraca gotow¹ tabelê
+  wynikiTable.innerHTML = data.html; // backend zwraca gotowÄ… tabelÄ™
 });
 </script>
 </body>
