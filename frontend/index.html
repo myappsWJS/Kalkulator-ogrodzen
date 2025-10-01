@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kalkulator akcesoriów do monta¿u siatki</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #ccc; padding: 20px; text-align: center; margin: 0; }
+  .container { width: 100%; max-width: 800px; margin: auto; display: none; }
+  h2 { background: limegreen; color: black; padding: 10px; margin: 0 auto 15px auto; }
+  table { border-collapse: collapse; margin: 10px auto; width: 100%; }
+  td, th { border: 1px solid #000; padding: 5px; text-align: center; }
+  .label-cell { background: #aaa; text-align: left; padding-left: 10px; font-weight: bold; }
+  .input-cell { background: yellow; text-align: center; }
+  .input-cell input, .input-cell select { width: 100%; box-sizing: border-box; padding: 4px; font-size: 14px; text-align: center; }
+  .header-row { background: cyan; font-weight: bold; }
+  .result-row td { background: #00e5ff; }
+  .sum-row td { background: #ffeb3b; font-weight: bold; }
+  button { margin-top: 10px; padding: 8px 14px; font-size: 14px; cursor: pointer; }
+  #wyniki { display: none; }
+  #login-box { margin: 100px auto; background: #fff; padding: 30px; width: 300px; border-radius: 12px; box-shadow: 0 0 10px rgba(0,0,0,0.4); }
+  @media (max-width: 600px) {
+    body { padding: 10px; }
+    h2 { font-size: 1.1rem; padding: 8px; }
+    td, th { font-size: 0.85rem; padding: 4px; }
+    .input-cell input, .input-cell select { font-size: 0.9rem; }
+    #login-box { width: 90%; padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ekran logowania -->
+<div id="login-box">
+  <h2>Logowanie</h2>
+  <input type="password" id="login-pass" placeholder="Wpisz kod dostêpu">
+  <br><br>
+  <button id="login-btn">Zaloguj</button>
+  <p id="login-msg" style="color:red; display:none;">B³êdny kod!</p>
+</div>
+
+<!-- g³ówna aplikacja -->
+<div class="container">
+  <h2>Kalkulator ogrodzeñ z siatki</h2>
+
+  <table>
+    <tr>
+      <td class="label-cell">D³ugoœæ ca³kowita ogrodzenia (m)</td>
+      <td class="input-cell" colspan="3"><input type="number" id="dlugosc" value="0" min="0" step="0.1"></td>
+    </tr>
+    <tr>
+      <td class="label-cell">Iloœæ naro¿ników</td>
+      <td class="input-cell" colspan="3">
+        <select id="narozniki"><option>0</option><option>1</option><option>2</option><option>3</option></select>
+      </td>
+    </tr>
+    <tr>
+      <td class="label-cell">Wysokoœæ ogrodzenia</td>
+      <td class="input-cell" colspan="3">
+        <select id="wysokosc">
+          <option value="">Wybierz</option>
+          <option value="1">1</option>
+          <option value="1.2">1,2</option>
+          <option value="1.5">1,5</option>
+        </select>
+      </td>
+    </tr>
+    <tr>
+      <td class="label-cell">Kolor ogrodzenia</td>
+      <td class="input-cell" colspan="3">
+        <select id="kolor">
+          <option value="">Wybierz</option>
+          <option value="Ant">Antracyt</option>
+          <option value="Zie">Zielony</option>
+          <option value="Ocynk">Ocynk</option>
+        </select>
+      </td>
+    </tr>
+  </table>
+
+  <table id="wyniki"></table>
+
+  <button id="btnCalc">Oblicz</button>
+</div>
+
+<script>
+const loginBox = document.getElementById("login-box");
+const container = document.querySelector(".container");
+const wynikiTable = document.getElementById("wyniki");
+
+document.getElementById("login-btn").addEventListener("click", async () => {
+  const pass = document.getElementById("login-pass").value;
+  const res = await fetch("/api/kalkulator?mode=login&pass=" + encodeURIComponent(pass));
+  const data = await res.json();
+  if(data.ok){
+    loginBox.style.display = "none";
+    container.style.display = "block";
+  } else {
+    document.getElementById("login-msg").style.display = "block";
+  }
+});
+
+document.getElementById("btnCalc").addEventListener("click", async () => {
+  const payload = {
+    dlugosc: parseFloat(document.getElementById("dlugosc").value)||0,
+    narozniki: parseInt(document.getElementById("narozniki").value)||0,
+    wysokosc: document.getElementById("wysokosc").value,
+    kolor: document.getElementById("kolor").value
+  };
+
+  const res = await fetch("/api/kalkulator", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await res.json();
+  if(!data.ok){ alert("B³¹d kalkulacji"); return; }
+
+  wynikiTable.style.display = "table";
+  wynikiTable.innerHTML = data.html; // backend zwraca gotow¹ tabelê
+});
+</script>
+</body>
+</html>
