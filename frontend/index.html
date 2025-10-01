@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kalkulator akcesoriów do montażu siatki</title>
+<title>Kalkulator ogrodzeń</title>
 <style>
   body { font-family: Arial, sans-serif; background: #ccc; padding: 20px; text-align: center; margin: 0; }
   .container { width: 100%; max-width: 800px; margin: auto; display: none; }
@@ -88,6 +88,7 @@ const loginBox = document.getElementById("login-box");
 const container = document.querySelector(".container");
 const wynikiTable = document.getElementById("wyniki");
 
+// logowanie
 document.getElementById("login-btn").addEventListener("click", async () => {
   const pass = document.getElementById("login-pass").value;
   const res = await fetch("/api/kalkulator?mode=login&pass=" + encodeURIComponent(pass));
@@ -100,6 +101,76 @@ document.getElementById("login-btn").addEventListener("click", async () => {
   }
 });
 
+// renderowanie tabeli z obsługą "wybierz rodzaj"
+function renderTable(data){
+  wynikiTable.style.display = "table";
+  wynikiTable.innerHTML = `
+    <tr class="header-row">
+      <th>Referencja</th>
+      <th>Nazwa</th>
+      <th>Cena</th>
+      <th>Ilość</th>
+      <th>Wartość</th>
+    </tr>
+  `;
+
+  data.rows.forEach(row => {
+    const tr = document.createElement("tr");
+    tr.classList.add("result-row");
+
+    if(Array.isArray(row) && row.length > 1){
+      // kilka wariantów → select
+      tr.innerHTML = `
+        <td></td>
+        <td colspan="4">
+          <select class="variant-select">
+            <option value="">Wybierz rodzaj</option>
+            ${row.map(r => 
+              `<option value="${r.ref}" data-cena="${r.cena}" data-qty="${r.qty}">
+                ${r.nazwa} — ${r.cena.toFixed(2)} zł
+              </option>`
+            ).join("")}
+          </select>
+        </td>
+      `;
+    } else {
+      // pojedynczy wariant
+      const p = Array.isArray(row) ? row[0] : row;
+      tr.innerHTML = `
+        <td>${p.ref}</td>
+        <td>${p.nazwa}</td>
+        <td>${p.cena.toFixed(2)}</td>
+        <td>${p.qty}</td>
+        <td>${(p.cena * p.qty).toFixed(2)}</td>
+      `;
+    }
+    wynikiTable.appendChild(tr);
+  });
+
+  // suma na końcu
+  wynikiTable.innerHTML += `
+    <tr class="sum-row"><td colspan="4">SUMA</td><td>${data.suma.toFixed(2)}</td></tr>
+  `;
+
+  // obsługa wyboru wariantu
+  wynikiTable.querySelectorAll(".variant-select").forEach(sel => {
+    sel.addEventListener("change", e => {
+      const opt = e.target.selectedOptions[0];
+      if(opt.value){
+        const tr = e.target.closest("tr");
+        tr.innerHTML = `
+          <td>${opt.value}</td>
+          <td>${opt.textContent.split(" — ")[0]}</td>
+          <td>${parseFloat(opt.dataset.cena).toFixed(2)}</td>
+          <td>${opt.dataset.qty}</td>
+          <td>${(opt.dataset.cena * opt.dataset.qty).toFixed(2)}</td>
+        `;
+      }
+    });
+  });
+}
+
+// przycisk oblicz
 document.getElementById("btnCalc").addEventListener("click", async () => {
   const payload = {
     dlugosc: parseFloat(document.getElementById("dlugosc").value)||0,
@@ -116,9 +187,7 @@ document.getElementById("btnCalc").addEventListener("click", async () => {
 
   const data = await res.json();
   if(!data.ok){ alert("Błąd kalkulacji"); return; }
-
-  wynikiTable.style.display = "table";
-  wynikiTable.innerHTML = data.html; // backend zwraca gotową tabelę
+  renderTable(data);
 });
 </script>
 </body>
